@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Humanoid Fleet Control Center — Factory Simulation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0a1016;--panel:#111a23;--panel2:#0e161e;--line:#1e2a36;--text:#d9e3ec;--mut:#7f91a3;--acc:#38bdf8;--ok:#4ade80;--warn:#fbbf24;--bad:#f87171;--vio:#c084fc;--org:#fb923c}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 "IBM Plex Sans",system-ui,sans-serif}
+.mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+header{padding:20px 22px 4px;max-width:1500px;margin:0 auto}
+h1{font-size:21px;margin:0 0 4px;font-weight:600}
+h1 span{color:var(--acc)}
+header p{margin:0;color:var(--mut);max-width:920px}
+.wrap{display:grid;grid-template-columns:minmax(0,1fr) 350px;gap:14px;padding:14px 22px 26px;max-width:1500px;margin:0 auto}
+@media(max-width:1050px){.wrap{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.card h2{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);margin:0 0 10px;font-weight:500}
+canvas{width:100%;height:auto;display:block;border-radius:8px;background:var(--panel2);cursor:crosshair}
+.col{display:flex;flex-direction:column;gap:14px;min-width:0}
+.seg{display:flex;gap:4px;background:var(--panel2);padding:3px;border-radius:8px;border:1px solid var(--line)}
+.seg button{flex:1;border:0;background:transparent;color:var(--mut);padding:7px 4px;border-radius:6px;font:500 12px "IBM Plex Sans",sans-serif;cursor:pointer}
+.seg button.on{background:#1b2a38;color:var(--text);box-shadow:inset 0 0 0 1px #2c4054}
+.row{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap}
+.btn{border:1px solid #2a3a4a;background:#152230;color:var(--text);padding:7px 11px;border-radius:7px;font:500 12.5px "IBM Plex Sans",sans-serif;cursor:pointer}
+.btn:hover{border-color:var(--acc)}
+.btn:disabled{opacity:.5;cursor:default}
+.btn.ev{flex:1 1 45%;text-align:left}
+.btn.ev b{display:block;font-weight:600}
+.btn.ev small{color:var(--mut);font-weight:400}
+label{color:var(--mut);font-size:12.5px}
+select,input[type=range]{accent-color:var(--acc)}
+select{background:var(--panel2);color:var(--text);border:1px solid #2a3a4a;border-radius:6px;padding:5px}
+.desc{color:var(--mut);font-size:12.5px;margin:8px 0 0;min-height:36px}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tile{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.tile .k{font-size:11px;color:var(--mut)}
+.tile .v{font:500 19px "IBM Plex Mono",monospace;margin-top:2px}
+.log{height:250px;overflow:auto;font:11.5px/1.5 "IBM Plex Mono",monospace;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px}
+.log div{white-space:pre-wrap;word-break:break-word}
+.log .tm{color:#4f6375}
+.log .cc{color:#7dd3fc}.log .ok{color:#86efac}.log .warn{color:#fcd34d}.log .bad{color:#fca5a5}.log .info{color:#cbd5e1}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:var(--mut);margin-top:10px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.insp{font-size:13px}
+.insp .muted{color:var(--mut)}
+.insp table{width:100%;border-collapse:collapse;margin-top:6px}
+.insp td{padding:3px 0;border-bottom:1px solid var(--line)}
+.insp td:last-child{text-align:right;font-family:"IBM Plex Mono",monospace}
+.bench table{width:100%;border-collapse:collapse;font-size:13px}
+.bench th,.bench td{text-align:right;padding:7px 8px;border-bottom:1px solid var(--line)}
+.bench th:first-child,.bench td:first-child{text-align:left}
+.bench th{color:var(--mut);font-weight:500;font-size:12px}
+.bar{height:8px;border-radius:4px;background:var(--acc);margin-top:4px}
+.best{color:var(--ok)}
+.note{color:var(--mut);font-size:12.5px;margin-top:8px}
+.map{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.map div{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:13px}
+.map b{display:block;margin-bottom:3px;color:var(--acc);font-weight:600}
+</style>
+</head>
+<body>
+<header>
+  <h1><span>●</span> Humanoid Fleet Control Center</h1>
+  <p>A simulated car assembly line run by 12 humanoid robots. The control center assigns every task, decides when robots charge or get serviced, and reacts to disruptions you trigger. Switch strategies to see how much the orchestration matters. All figures come from this simulation, not a real plant.</p>
+</header>
+
+<div class="wrap">
+  <div class="col">
+    <div class="card" style="padding:10px">
+      <canvas id="floor" width="1100" height="600" aria-label="Factory floor simulation"></canvas>
+      <div class="legend" id="legend"></div>
+    </div>
+
+    <div class="card bench">
+      <h2>Strategy benchmark: one simulated shift-hour</h2>
+      <p class="note" style="margin-top:0">Runs each strategy for 60 simulated minutes on 3 random seeds, with the same scripted disruptions in each run: an engine shortage at minute 10, a 30-second protective stop at Powertrain at minute 25, and two robot faults at minute 40. The current fault-rate setting applies.</p>
+      <div class="row" style="margin-top:4px"><button class="btn" id="benchBtn">Run benchmark</button><span class="note" id="benchStatus" style="margin:0"></span></div>
+      <div id="benchOut" style="margin-top:10px"></div>
+    </div>
+
+    <div class="card">
+      <h2>Turning this into a real Claude Code control center</h2>
+      <div class="map">
+        <div><b>Fleet layer → MCP server</b>Each robot or cell reports its state and accepts commands through an MCP server. In a real plant this would wrap the fleet manager, ROS 2, VDA 5050 for mobile robots, or OPC UA for the line PLCs.</div>
+        <div><b>Fast loop stays deterministic</b>Task bidding and charging rules (the scheduler in this page) run in milliseconds in ordinary code. Claude sets the policy but doesn't sit inside the real-time loop.</div>
+        <div><b>Claude as supervisor</b>Claude handles the exceptions: re-sequencing around a parts shortage, re-planning after a fault, slotting in a rush order. It explains each decision to the shift lead. Subagents can each own a cell.</div>
+        <div><b>Safety is hardware</b>Protective stops come from safety PLCs, light curtains and robot controllers. The AI is told about a stop and plans around it, but it never starts or overrides one.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="card">
+      <h2>Orchestration strategy</h2>
+      <div class="seg" id="strat">
+        <button data-s="fixed">Fixed stations</button>
+        <button data-s="greedy">Greedy nearest</button>
+        <button data-s="ai" class="on">AI control center</button>
+      </div>
+      <p class="desc" id="stratDesc"></p>
+      <div class="row">
+        <button class="btn" id="playBtn">Pause</button>
+        <button class="btn" id="resetBtn">Restart</button>
+        <label>Speed <select id="speed"><option>1</option><option>2</option><option selected>4</option><option>8</option><option>16</option></select>×</label>
+      </div>
+      <div class="row">
+        <label style="flex:1">Random faults: <span id="frv" class="mono">1.0</span> per robot-hour<br><input id="fault" type="range" min="0" max="6" step="0.5" value="1" style="width:100%"></label>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Inject a disruption</h2>
+      <div class="row" style="margin-top:0">
+        <button class="btn ev" data-ev="fault"><b>Robot fault</b><small>A busy robot breaks down</small></button>
+        <button class="btn ev" data-ev="shortage"><b>Parts shortage</b><small>One part runs out for 60 s</small></button>
+        <button class="btn ev" data-ev="safety"><b>Person enters zone</b><small>20 s protective stop</small></button>
+        <button class="btn ev" data-ev="rush"><b>Rush order</b><small>Next 3 cars are priority</small></button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Line metrics</h2>
+      <div class="tiles" id="tiles"></div>
+    </div>
+
+    <div class="card">
+      <h2>Control center console</h2>
+      <div class="log" id="log"></div>
+    </div>
+
+    <div class="card insp">
+      <h2>Robot inspector</h2>
+      <div id="insp"><span class="muted">Click a robot on the floor to inspect it.</span></div>
+    </div>
+  </div>
+</div>
+
+<script id="core">
+// ======================= SIMULATION CORE (no DOM) =======================
+const W=1100,H=600,LINE_Y=297,SPEED=70,ZR=105;
+const sx=i=>165+150*i;
+const STATIONS=[
+  {name:'Body welding',tasks:[{n:'Weld underbody',s:'weld',d:30,p:'panels'},{n:'Spot-weld side frames',s:'weld',d:25}]},
+  {name:'Paint shop',tasks:[{n:'Prime coat',s:'paint',d:25},{n:'Top coat',s:'paint',d:30}]},
+  {name:'Powertrain',tasks:[{n:'Install engine',s:'heavy',d:35,p:'engine'},{n:'Mount axles',s:'heavy',d:25}]},
+  {name:'Wiring & trim',tasks:[{n:'Route wiring harness',s:'wiring',d:30,p:'harness'},{n:'Fit dashboard',s:'fasten',d:25,p:'dash'}]},
+  {name:'Final assembly',tasks:[{n:'Mount wheels',s:'fasten',d:20,p:'wheels'},{n:'Install seats',s:'fasten',d:25,p:'seats'},{n:'Hang doors',s:'heavy',d:25}]},
+  {name:'Quality gate',tasks:[{n:'Vision inspection',s:'inspect',d:20},{n:'Functional checks',s:'inspect',d:15}]},
+];
+const PARTS=['panels','engine','harness','dash','wheels','seats'];
+const PART_COL={panels:'#94a3b8',engine:'#f97316',harness:'#eab308',dash:'#a78bfa',wheels:'#cbd5e1',seats:'#2dd4bf'};
+const ROBOTS=[
+  ['HR-01',{weld:1.2,heavy:0.8},0],['HR-02',{weld:1.1,fasten:0.9},0],
+  ['HR-03',{paint:1.2,inspect:0.8},1],['HR-04',{paint:1.0,wiring:0.9},1],
+  ['HR-05',{heavy:1.2,fasten:0.9},2],['HR-06',{heavy:1.1,weld:0.8},2],
+  ['HR-07',{wiring:1.2,fasten:1.0},3],['HR-08',{fasten:1.1,wiring:0.9},3],
+  ['HR-09',{fasten:1.2,heavy:0.9},4],['HR-10',{fasten:1.0,heavy:1.0},4],
+  ['HR-11',{inspect:1.2,paint:0.8},5],['HR-12',{inspect:1.0,wiring:0.8,fasten:0.8},5],
+];
+const STRAT_NAMES={fixed:'Fixed stations',greedy:'Greedy nearest',ai:'AI control center'};
+const WH_PICK={x:210,y:150};
+const OFF=[[-32,-75],[32,-75],[0,75]];
+const CAR_COLORS=['#dc2626','#2563eb','#e5e7eb','#16a34a','#1f2937','#9333ea','#ea580c','#0891b2'];
+const spotPos=tk=>({x:sx(tk.st)+OFF[tk.spot][0],y:LINE_Y+OFF[tk.spot][1]});
+const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+const pickPt=r=>({x:WH_PICK.x+((r.k%6)-2.5)*15,y:WH_PICK.y+Math.floor(r.k/6)*16});
+const dockPt=i=>({x:105+78*i,y:532});
+const dockQPt=r=>({x:430+(r.k%3)*16,y:512+(Math.floor(r.k/3)%2)*22});
+const bayPt=i=>({x:830+120*i,y:532});
+const MOVING=['toPick','toWork','toCharge','toService','toDockQ'];
+
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+
+class Sim{
+  constructor({strategy='ai',seed=7,faultRate=1,headless=false}={}){
+    Object.assign(this,{strategy,seed,faultRate,headless});
+    this.rng=mulberry32(seed);
+    this.t=0;this.completed=0;this.cycle=[];this.faults=0;this.batteryAborts=0;this.starve=0;
+    this.log=[];this.logSeq=0;this.beams=[];this.taskSeq=0;this.carSeq=0;this.rushPending=0;this.exiting=[];this.ccTimer=0;
+    this.inv={};PARTS.forEach(p=>this.inv[p]=12);this.repl=0;this.shortage=null;this.safety=null;
+    this.stations=STATIONS.map((def,i)=>({i,def,car:null,tasks:[],idleT:0}));
+    this.dock=[null,null,null,null];this.bay=[null,null];
+    this.robots=ROBOTS.map(([id,skills,home],k)=>({id,k,skills,home,x:sx(home)+(k%2?22:-22),y:430,state:'idle',task:null,
+      battery:55+this.rng()*45,wear:this.rng()*35,carry:null,timer:0,slot:null,slotKind:null,chargeTo:95,workT:0,note:'',frozen:false}));
+    this.say('cc',`Shift started · strategy: ${STRAT_NAMES[strategy]} · ${this.robots.length} humanoids online`);
+  }
+  say(kind,msg){if(this.headless)return;this.log.push({t:this.t,kind,msg,id:++this.logSeq});if(this.log.length>150)this.log.shift();}
+
+  step(dt){
+    this.t+=dt;
+    this.repl+=dt;
+    if(this.repl>=20){this.repl=0;PARTS.forEach(p=>{if(!(this.shortage&&this.shortage.part===p)&&this.inv[p]<20)this.inv[p]++;});}
+    if(this.shortage&&this.t>=this.shortage.until){this.inv[this.shortage.part]+=10;this.say('ok',`Supplier truck delivered 10× ${this.shortage.part}`);this.shortage=null;}
+    if(this.safety&&this.t>=this.safety.until){this.say('ok',`${STATIONS[this.safety.st].name} zone clear, robots resume`);this.safety=null;}
+    this.updateCars(dt);
+    for(const r of this.robots)this.updateRobot(r,dt);
+    for(const st of this.stations){
+      if(st.car&&st.car.state==='at'&&st.tasks.some(t=>t.state!=='done')){
+        if(!st.tasks.some(t=>t.state==='working')){st.idleT+=dt;this.starve+=dt;}else st.idleT=0;
+      }else st.idleT=0;
+    }
+    this.ccTimer+=dt;
+    if(this.ccTimer>=0.5){this.ccTimer=0;this.control();}
+    if(!this.headless){
+      this.beams=this.beams.filter(b=>b.until>this.t);
+      for(const c of this.exiting)c.x+=110*dt;
+      this.exiting=this.exiting.filter(c=>c.x<W+60);
+    }
+  }
+
+  updateCars(dt){
+    const S=this.stations,L=S.length;
+    for(let s=L-1;s>=0;s--){
+      const st=S[s],c=st.car;if(!c)continue;
+      if(c.state==='moving'){
+        c.x=Math.min(sx(s),c.x+110*dt);
+        if(c.x>=sx(s)){c.state='at';this.arrive(st,c);}
+        continue;
+      }
+      if(st.tasks.length&&st.tasks.every(t=>t.state==='done')){
+        if(s===L-1){
+          this.completed++;this.cycle.push(this.t-c.tEnter);st.car=null;st.tasks=[];c.state='exit';
+          if(!this.headless)this.exiting.push(c);
+          this.say('ok',`Car #${c.id}${c.rush?' (rush)':''} passed QA and rolled off the line · ${fmtDur(this.t-c.tEnter)} on the line`);
+        }else if(!S[s+1].car){S[s+1].car=c;st.car=null;st.tasks=[];c.state='moving';}
+      }
+    }
+    if(!S[0].car){
+      const rush=this.rushPending>0;if(rush)this.rushPending--;
+      S[0].car={id:++this.carSeq,x:-40,state:'moving',color:CAR_COLORS[Math.floor(this.rng()*CAR_COLORS.length)],painted:false,wheels:false,rush,tEnter:this.t};
+    }
+  }
+  arrive(st,c){
+    if(st.i===2)c.painted=true;
+    st.tasks=st.def.tasks.map((d,j)=>({id:++this.taskSeq,...d,st:st.i,spot:j,car:c,state:'pending',robot:null,created:this.t,rem:0,total:0,prio:0}));
+  }
+
+  move(r,p,dt){
+    const dx=p.x-r.x,dy=p.y-r.y,d=Math.hypot(dx,dy),step=SPEED*dt*(r.battery<10?0.6:1);
+    if(d<=step){r.x=p.x;r.y=p.y;return true;}
+    const nx=r.x+dx/d*step,ny=r.y+dy/d*step,z=this.safety;
+    if(z){const zx=sx(z.st);if(Math.hypot(nx-zx,ny-LINE_Y)<ZR&&Math.hypot(r.x-zx,r.y-LINE_Y)>=ZR){r.blocked=true;return false;}}
+    r.blocked=false;r.x=nx;r.y=ny;return false;
+  }
+
+  updateRobot(r,dt){
+    const z=this.safety,inZone=!!z&&Math.hypot(r.x-sx(z.st),r.y-LINE_Y)<ZR;
+    const moving=MOVING.includes(r.state),active=moving||r.state==='working';
+    let drain=r.state==='working'?0.45:moving?0.25:r.state==='charging'?0:0.03;
+    if(inZone&&active)drain=0.03;
+    r.battery=Math.max(0,r.battery-drain*dt);
+    if(active&&!inZone&&this.faultRate>0){
+      const h=this.faultRate/3600*(0.25+4*(r.wear/100)**3);
+      if(this.rng()<h*dt){this.fault(r,'random');return;}
+    }
+    if(r.battery<=4&&['toPick','waitPart','toWork','working'].includes(r.state)){
+      this.batteryAborts++;
+      this.say('bad',`${r.id}: battery critical (${r.battery.toFixed(0)}%), abandoning "${r.task.n}" and heading to a charger`);
+      this.release(r);this.sendCharge(r);return;
+    }
+    r.frozen=inZone&&active;
+    if(r.frozen)return;
+    switch(r.state){
+      case 'toPick':if(this.move(r,pickPt(r),dt))r.state='waitPart';break;
+      case 'waitPart':{
+        const p=r.task.p;
+        if(this.inv[p]>0){this.inv[p]--;r.carry=p;r.state='toWork';r.note='';}
+        else if(!r.note){r.note='waiting';this.say('warn',`${r.id}: no ${p} in stock, waiting at the warehouse`);}
+        break;}
+      case 'toWork':
+        if(this.move(r,spotPos(r.task),dt)){
+          r.state='working';r.task.state='working';
+          r.task.total=r.task.d/r.skills[r.task.s];r.task.rem=r.task.total;
+        }break;
+      case 'working':
+        r.task.rem-=dt;r.workT+=dt;r.wear=Math.min(100,r.wear+0.12*dt);
+        if(r.task.rem<=0){const tk=r.task;tk.state='done';if(tk.n==='Mount wheels')tk.car.wheels=true;r.carry=null;r.task=null;r.state='idle';}
+        break;
+      case 'toCharge':if(this.move(r,dockPt(r.slot),dt))r.state='charging';break;
+      case 'charging':
+        r.battery=Math.min(100,r.battery+2.5*dt);
+        if(r.battery>=r.chargeTo){this.dock[r.slot]=null;r.slot=null;r.slotKind=null;r.state='idle';}
+        break;
+      case 'toDockQ':this.move(r,dockQPt(r),dt);break;
+      case 'fault':
+        r.timer-=dt;
+        if(r.timer<=0){r.state='idle';r.wear=15;this.say('ok',`${r.id}: repaired by technician, back in service`);}
+        break;
+      case 'toService':if(this.move(r,bayPt(r.slot),dt)){r.state='service';r.timer=20;}break;
+      case 'service':
+        r.timer-=dt;
+        if(r.timer<=0){this.bay[r.slot]=null;r.slot=null;r.slotKind=null;r.wear=0;r.state='idle';this.say('ok',`${r.id}: preventive service done, wear reset`);}
+        break;
+    }
+  }
+  release(r){
+    if(r.task){r.task.state='pending';r.task.robot=null;r.task.rem=0;r.task=null;}
+    if(r.carry){this.inv[r.carry]++;r.carry=null;}
+    r.note='';
+  }
+  freeSlot(r){
+    if(r.slot!=null){(r.slotKind==='bay'?this.bay:this.dock)[r.slot]=null;r.slot=null;r.slotKind=null;}
+  }
+  fault(r,why){
+    const tn=r.task?r.task.n:null;
+    this.release(r);this.freeSlot(r);
+    r.state='fault';r.timer=35+this.rng()*25;this.faults++;
+    this.say('bad',`${r.id}: ${why==='forced'?'reported':'actuator'} fault${tn?`, "${tn}" put back in the queue`:''}. Technician dispatched`);
+  }
+  sendCharge(r){
+    const i=this.dock.indexOf(null);
+    r.chargeTo=this.strategy==='ai'?90:95;
+    if(i>=0){this.dock[i]=r.id;r.slot=i;r.slotKind='dock';r.state='toCharge';}
+    else r.state='toDockQ';
+  }
+  sendService(r){const i=this.bay.indexOf(null);this.bay[i]=r.id;r.slot=i;r.slotKind='bay';r.state='toService';}
+
+  control(){
+    const R=this.robots,ai=this.strategy==='ai';
+    for(const r of R.filter(r=>r.state==='toDockQ').sort((a,b)=>a.battery-b.battery)){
+      const i=this.dock.indexOf(null);if(i<0)break;
+      this.dock[i]=r.id;r.slot=i;r.slotKind='dock';r.state='toCharge';
+    }
+    const pending=[];
+    for(const st of this.stations)for(const tk of st.tasks)if(tk.state==='pending')pending.push(tk);
+    for(const r of R){
+      if(r.state!=='idle')continue;
+      if(ai){
+        if(r.wear>=65&&this.bay.includes(null)){this.sendService(r);this.say('cc',`CC → ${r.id}: wear at ${r.wear.toFixed(0)}%, sending for preventive service before it fails`);continue;}
+        if(r.battery<35){this.say('cc',`CC → ${r.id}: battery ${r.battery.toFixed(0)}%, planned charge`);this.sendCharge(r);continue;}
+        const canDo=pending.some(tk=>r.skills[tk.s]&&!(this.safety&&this.safety.st===tk.st));
+        if(!canDo&&r.battery<75&&this.dock.filter(x=>x===null).length>=2){this.sendCharge(r);this.say('cc',`CC → ${r.id}: no work for your skills right now, top up battery (${r.battery.toFixed(0)}%)`);continue;}
+      }else if(r.battery<15){this.say('warn',`${r.id}: battery ${r.battery.toFixed(0)}%, going to charge`);this.sendCharge(r);}
+    }
+    if(ai){
+      for(const tk of pending){
+        let p=this.t-tk.created;const prev=this.stations[tk.st-1];
+        if(prev&&prev.car&&prev.car.state==='at'&&prev.tasks.length&&prev.tasks.every(x=>x.state==='done'))p+=30;
+        if(tk.car.rush)p+=40;
+        p+=tk.d*0.6;tk.prio=p;
+      }
+      pending.sort((a,b)=>b.prio-a.prio);
+    }else pending.sort((a,b)=>a.created-b.created);
+    const z=this.safety;
+    for(const tk of pending){
+      if(ai&&z&&z.st===tk.st)continue;
+      if(ai&&tk.p&&this.inv[tk.p]===0)continue;
+      const sp=spotPos(tk);let best=null,bc=Infinity,second=Infinity;
+      for(const r of R){
+        const topUp=ai&&r.state==='charging'&&r.battery>=60;
+        if((r.state!=='idle'&&!topUp)||!r.skills[tk.s])continue;
+        if(this.strategy==='fixed'&&r.home!==tk.st)continue;
+        const path=(tk.p?dist(r,WH_PICK)+dist(WH_PICK,sp):dist(r,sp))/SPEED;
+        let c;
+        if(ai){
+          const work=tk.d/r.skills[tk.s],need=path*0.25+work*0.45;
+          if(r.battery-need<20)continue;
+          c=path+work+(100-r.battery)*0.05+r.wear*0.04+(topUp?4:0);
+        }else{
+          if(r.battery<15)continue;
+          c=this.strategy==='greedy'?path:0;
+        }
+        if(c<bc){second=bc;bc=c;best=r;}else if(c<second)second=c;
+      }
+      if(best)this.assign(best,tk,bc,second);
+    }
+  }
+  assign(r,tk,bc,second){
+    const wasCharging=r.state==='charging';if(wasCharging)this.freeSlot(r);
+    r.task=tk;tk.robot=r.id;tk.state='assigned';r.state=tk.p?'toPick':'toWork';r.note='';
+    if(this.headless)return;
+    this.beams.push({id:r.id,until:this.t+1.2});
+    const sn=STATIONS[tk.st].name,rush=tk.car.rush?' · RUSH':'';
+    if(this.strategy==='ai')this.say('cc',`CC ⇢ ${r.id}: "${tk.n}" @ ${sn} · bid ${bc.toFixed(1)}${second<Infinity?` (next ${second.toFixed(1)})`:' (only bidder)'}${rush}${wasCharging?' · pulled off charger':''}`);
+    else this.say('cc',`CC ⇢ ${r.id}: "${tk.n}" @ ${sn}${rush}`);
+  }
+
+  // ---- disruptions ----
+  evFault(){
+    let c=this.robots.filter(r=>r.state==='working'||MOVING.includes(r.state));
+    if(!c.length)c=this.robots.filter(r=>r.state!=='fault');
+    if(c.length)this.fault(c[Math.floor(this.rng()*c.length)],'forced');
+  }
+  evShortage(part){
+    part=part||['engine','harness','wheels','seats','dash'][Math.floor(this.rng()*5)];
+    this.inv[part]=0;this.shortage={part,until:this.t+60};
+    this.say('bad',`SUPPLY: ${part} stock-out, next truck in 60 s`);
+  }
+  evSafety(st,dur=20){
+    if(st==null)st=1+Math.floor(this.rng()*4);
+    this.safety={st,until:this.t+dur};
+    this.say('bad',`SAFETY: person entered the ${STATIONS[st].name} zone. Protective stop for ${dur} s, robots inside frozen`);
+  }
+  evRush(){this.rushPending+=3;this.say('cc','CC: rush order received, the next 3 cars get priority');}
+
+  metrics(){
+    const t=Math.max(this.t,1),n=this.robots.length;
+    const util=this.robots.reduce((a,r)=>a+r.workT,0)/(n*t);
+    const cyc=this.cycle.length?this.cycle.reduce((a,b)=>a+b,0)/this.cycle.length:0;
+    let waiting=0;for(const st of this.stations)for(const tk of st.tasks)if(tk.state==='pending')waiting++;
+    return{t:this.t,cars:this.completed,thr:this.completed/(t/3600),util,cycle:cyc,faults:this.faults,aborts:this.batteryAborts,
+      starve:this.starve/(this.stations.length*t),waiting,avgBatt:this.robots.reduce((a,r)=>a+r.battery,0)/n};
+  }
+}
+function fmtDur(s){s=Math.round(s);return `${Math.floor(s/60)}m ${String(s%60).padStart(2,'0')}s`;}
+function runHeadless(strategy,seed,faultRate,dur=3600){
+  const s=new Sim({strategy,seed,faultRate,headless:true});
+  const sched=[[600,()=>s.evShortage('engine')],[1500,()=>s.evSafety(2,30)],[2400,()=>{s.evFault();s.evFault();}]];
+  let i=0;
+  while(s.t<dur){while(i<sched.length&&s.t>=sched[i][0]){sched[i][1]();i++;}s.step(0.25);}
+  return s.metrics();
+}
+</script>
+
+<script>
+// ======================= RENDERING & UI =======================
+const STATE_COL={idle:'#8aa0b4',toPick:'#22d3ee',waitPart:'#fbbf24',toWork:'#38bdf8',working:'#4ade80',toCharge:'#facc15',charging:'#facc15',toDockQ:'#a1a1aa',fault:'#f87171',toService:'#fb923c',service:'#fb923c'};
+const STATE_LABEL={idle:'Idle',toPick:'Walking to warehouse',waitPart:'Waiting for parts',toWork:'Walking to station',working:'Working',toCharge:'Walking to charger',charging:'Charging',toDockQ:'Queued for a charger',fault:'Fault, under repair',toService:'Walking to maintenance',service:'Preventive service'};
+const STRAT_DESC={
+  fixed:'Classic line: each robot is tied to its home station and only works there. Charging and repairs happen only after problems appear.',
+  greedy:'Any idle robot with the right skill takes the oldest task, closest robot first. Ignores skill level, battery and wear.',
+  ai:'Contract-net auction: robots bid on each task by travel time, skill level, battery and wear. Bottleneck and rush tasks go first, robots charge on a plan and get serviced before they fail, and no robot is sent to wait for parts that are out of stock.'};
+const legendItems=[['Working','#4ade80'],['Walking','#38bdf8'],['Fetching parts','#22d3ee'],['Waiting for parts','#fbbf24'],['Charging','#facc15'],['Fault','#f87171'],['Maintenance','#fb923c'],['Frozen (safety stop)','#c084fc'],['Idle','#8aa0b4']];
+document.getElementById('legend').innerHTML=legendItems.map(([l,c])=>`<span><i style="background:${c}"></i>${l}</span>`).join('');
+
+const cv=document.getElementById('floor'),ctx=cv.getContext('2d');
+let strategy='ai',sim,running=true,speed=4,selected=null,lastLogId=-1,lastPanel=0;
+const faultEl=document.getElementById('fault');
+function newSim(){sim=new Sim({strategy,seed:(Math.random()*1e9)|0,faultRate:+faultEl.value});lastLogId=-1;}
+function setupCanvas(){const dpr=Math.min(window.devicePixelRatio||1,2);cv.width=W*dpr;cv.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);}
+setupCanvas();newSim();
+
+function rr(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+function zone(x,y,w,h,label,col='#1e2a36'){rr(x,y,w,h,8);ctx.fillStyle='#101a23';ctx.fill();ctx.strokeStyle=col;ctx.lineWidth=1;ctx.stroke();
+  ctx.fillStyle='#6b7f92';ctx.font='500 10.5px "IBM Plex Mono",monospace';ctx.textAlign='left';ctx.fillText(label,x+10,y+16);}
+
+function drawCar(c,y){
+  const x=c.x;
+  rr(x-34,y-12,68,22,7);ctx.fillStyle=c.painted?c.color:'#55626f';ctx.fill();
+  if(c.rush){ctx.strokeStyle='#fbbf24';ctx.lineWidth=2;ctx.stroke();}
+  rr(x-15,y-21,32,11,4);ctx.fillStyle=c.painted?shade(c.color):'#6b7885';ctx.fill();
+  ctx.fillStyle='rgba(180,220,255,.35)';ctx.fillRect(x-11,y-19,24,6);
+  if(c.wheels){ctx.fillStyle='#0b0f14';ctx.strokeStyle='#9aa7b4';ctx.lineWidth=1.5;for(const dx of[-20,20]){ctx.beginPath();ctx.arc(x+dx,y+11,5.5,0,7);ctx.fill();ctx.stroke();}}
+  else{ctx.fillStyle='#3a4652';for(const dx of[-20,20])ctx.fillRect(x+dx-2,y+9,4,7);}
+  ctx.fillStyle='rgba(255,255,255,.75)';ctx.font='500 9px "IBM Plex Mono",monospace';ctx.textAlign='center';ctx.fillText('#'+c.id,x+18,y+4);
+}
+function shade(h){const n=parseInt(h.slice(1),16);const f=v=>Math.max(0,Math.min(255,Math.round(v*0.78)));return`rgb(${f(n>>16)},${f(n>>8&255)},${f(n&255)})`;}
+
+function drawRobot(r){
+  const col=r.frozen?'#c084fc':STATE_COL[r.state],x=r.x,y=r.y,t=sim.t;
+  if(r.state==='working'){ctx.beginPath();ctx.arc(x,y-3,13+Math.sin(t*6+r.k)*1.5,0,7);ctx.strokeStyle='rgba(74,222,128,.25)';ctx.lineWidth=2;ctx.stroke();}
+  if(selected===r.id){ctx.beginPath();ctx.arc(x,y-3,17,0,7);ctx.strokeStyle='#e2e8f0';ctx.lineWidth=1.5;ctx.setLineDash([3,3]);ctx.stroke();ctx.setLineDash([]);}
+  ctx.strokeStyle=col;ctx.lineWidth=2;ctx.beginPath();
+  const sw=MOVING.includes(r.state)&&!r.frozen&&!r.blocked?Math.sin(t*10+r.k)*2.5:0;
+  ctx.moveTo(x-2,y+5);ctx.lineTo(x-3+sw,y+12);ctx.moveTo(x+2,y+5);ctx.lineTo(x+3-sw,y+12);ctx.stroke();
+  rr(x-5,y-7,10,13,3);ctx.fillStyle=col;ctx.fill();
+  ctx.beginPath();ctx.arc(x,y-12,4.5,0,7);ctx.fill();
+  ctx.fillStyle='#0a1016';ctx.fillRect(x-2.5,y-13,5,1.6);
+  if(r.carry){ctx.fillStyle=PART_COL[r.carry];ctx.fillRect(x+5,y-4,6,6);}
+  const b=r.battery/100;ctx.fillStyle='#1f2a35';ctx.fillRect(x-8,y-23,16,3);
+  ctx.fillStyle=b>0.5?'#4ade80':b>0.25?'#facc15':'#f87171';ctx.fillRect(x-8,y-23,16*b,3);
+  ctx.fillStyle='#8193a5';ctx.font='9px "IBM Plex Mono",monospace';ctx.textAlign='center';ctx.fillText(r.id.slice(3),x,y+22);
+  if(r.state==='fault'){ctx.beginPath();ctx.arc(x+10,y-18,6,0,7);ctx.fillStyle='#f87171';ctx.fill();ctx.fillStyle='#0a1016';ctx.font='bold 9px sans-serif';ctx.fillText('!',x+10,y-15);}
+}
+
+function draw(){
+  ctx.fillStyle='#0d151d';ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='rgba(255,255,255,.025)';ctx.lineWidth=1;
+  for(let x=0;x<W;x+=25){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(let y=0;y<H;y+=25){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+  // warehouse
+  zone(60,30,300,100,'PARTS WAREHOUSE',sim.shortage?'#7f1d1d':'#1e2a36');
+  PARTS.forEach((p,i)=>{const x=78+i*46,v=sim.inv[p],h=42*Math.min(1,v/20),short=sim.shortage&&sim.shortage.part===p;
+    ctx.fillStyle='#1a2530';ctx.fillRect(x,66,30,42);ctx.fillStyle=short?'#f87171':PART_COL[p];ctx.fillRect(x,108-h,30,h);
+    ctx.fillStyle=short?'#fca5a5':'#7f91a3';ctx.font='9px "IBM Plex Mono",monospace';ctx.textAlign='center';ctx.fillText(p,x+15,121);
+    ctx.fillStyle='#d9e3ec';ctx.fillText(v,x+15,61);});
+  // control center
+  zone(760,30,280,100,'CONTROL CENTER','#1d4e6b');
+  ctx.fillStyle=(Math.floor(sim.t*2)%2)?'#38bdf8':'#0e7490';ctx.beginPath();ctx.arc(1022,26+14,4,0,7);ctx.fill();
+  ctx.fillStyle='#d9e3ec';ctx.font='600 15px "IBM Plex Sans",sans-serif';ctx.textAlign='left';ctx.fillText(STRAT_NAMES[sim.strategy],775,66);
+  const m=sim.metrics();
+  ctx.fillStyle='#7f91a3';ctx.font='11px "IBM Plex Mono",monospace';
+  ctx.fillText(`cars ${m.cars} · ${m.thr.toFixed(1)}/h · util ${(m.util*100).toFixed(0)}%`,775,88);
+  ctx.fillText(`queue ${m.waiting} tasks · faults ${m.faults}`,775,106);
+  // dock & bay
+  zone(60,480,340,95,'CHARGING DOCK');
+  sim.dock.forEach((d,i)=>{const p=dockPt(i);rr(p.x-22,p.y-20,44,40,6);ctx.strokeStyle=d?'#a16207':'#27333f';ctx.lineWidth=1.5;ctx.stroke();ctx.fillStyle='#3a4652';ctx.font='10px sans-serif';ctx.textAlign='center';if(!d)ctx.fillText('⚡',p.x,p.y+4);});
+  zone(740,480,300,95,'MAINTENANCE BAY');
+  sim.bay.forEach((d,i)=>{const p=bayPt(i);rr(p.x-26,p.y-20,52,40,6);ctx.strokeStyle=d?'#c2410c':'#27333f';ctx.lineWidth=1.5;ctx.stroke();});
+  // conveyor
+  rr(10,LINE_Y-26,W-20,52,10);ctx.fillStyle='#131e28';ctx.fill();
+  ctx.strokeStyle='#1d2934';ctx.lineWidth=2;const off=(sim.t*18)%24;
+  for(let x=10+off;x<W-10;x+=24){ctx.beginPath();ctx.moveTo(x,LINE_Y-26);ctx.lineTo(x,LINE_Y+26);ctx.stroke();}
+  ctx.fillStyle='#55697c';ctx.font='10px "IBM Plex Mono",monospace';ctx.textAlign='left';ctx.fillText('IN ▸',14,LINE_Y-32);ctx.textAlign='right';ctx.fillText('▸ OUT',W-14,LINE_Y-32);
+  // stations
+  for(const st of sim.stations){
+    const x=sx(st.i),inZ=sim.safety&&sim.safety.st===st.i,starved=st.idleT>8;
+    rr(x-62,245,124,105,9);ctx.fillStyle='rgba(16,26,35,.88)';ctx.fill();
+    ctx.strokeStyle=inZ?'#c084fc':starved?'#b45309':'#26384a';ctx.lineWidth=inZ||starved?2:1.2;ctx.stroke();
+    ctx.fillStyle=starved?'#fbbf24':'#9fb1c2';ctx.font='500 11px "IBM Plex Sans",sans-serif';ctx.textAlign='center';ctx.fillText(st.def.name,x,261);
+    if(st.car&&st.car.state==='at')drawCar(st.car,292);
+    const n=st.def.tasks.length;
+    st.def.tasks.forEach((d,j)=>{
+      const tk=st.tasks[j],cx=x+(j-(n-1)/2)*20,cy=333;
+      ctx.lineWidth=2;ctx.beginPath();ctx.arc(cx,cy,5.5,0,7);ctx.strokeStyle='#33465a';ctx.stroke();
+      if(!tk||!(st.car&&st.car.state==='at'))return;
+      if(tk.state==='done'){ctx.fillStyle='#4ade80';ctx.beginPath();ctx.arc(cx,cy,5.5,0,7);ctx.fill();}
+      else if(tk.state==='working'){ctx.strokeStyle='#4ade80';ctx.beginPath();ctx.arc(cx,cy,5.5,-Math.PI/2,-Math.PI/2+2*Math.PI*(1-tk.rem/tk.total));ctx.stroke();}
+      else if(tk.state==='assigned'){ctx.fillStyle='#38bdf8';ctx.beginPath();ctx.arc(cx,cy,2.5,0,7);ctx.fill();}
+    });
+  }
+  for(const st of sim.stations)if(st.car&&st.car.state==='moving')drawCar(st.car,292);
+  for(const c of sim.exiting)drawCar(c,292);
+  // safety zone
+  if(sim.safety){
+    const zx=sx(sim.safety.st);ctx.beginPath();ctx.arc(zx,LINE_Y,ZR,0,7);ctx.fillStyle='rgba(192,132,252,.07)';ctx.fill();
+    ctx.setLineDash([6,5]);ctx.strokeStyle='#c084fc';ctx.lineWidth=1.5;ctx.stroke();ctx.setLineDash([]);
+    const hx=zx+Math.sin(sim.t*0.8)*40,hy=LINE_Y+58;
+    ctx.fillStyle='#f472b6';ctx.beginPath();ctx.arc(hx,hy-12,5,0,7);ctx.fill();rr(hx-5,hy-6,10,14,3);ctx.fill();
+    ctx.fillStyle='#e9d5ff';ctx.font='500 10px "IBM Plex Mono",monospace';ctx.textAlign='center';
+    ctx.fillText(`PROTECTIVE STOP ${Math.ceil(sim.safety.until-sim.t)}s`,zx,LINE_Y-ZR+14);
+  }
+  // command beams
+  for(const b of sim.beams){const r=sim.robots.find(q=>q.id===b.id);const a=Math.max(0,(b.until-sim.t)/1.2);
+    ctx.strokeStyle=`rgba(56,189,248,${0.55*a})`;ctx.lineWidth=1;ctx.setLineDash([2,4]);ctx.beginPath();ctx.moveTo(900,130);ctx.lineTo(r.x,r.y-10);ctx.stroke();ctx.setLineDash([]);}
+  for(const r of sim.robots)drawRobot(r);
+  // clock
+  const clk=6*3600+sim.t,hh=Math.floor(clk/3600)%24,mm=Math.floor(clk/60)%60,ss=Math.floor(clk)%60;
+  ctx.fillStyle='#55697c';ctx.font='11px "IBM Plex Mono",monospace';ctx.textAlign='left';
+  ctx.fillText(`SHIFT CLOCK ${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}`,440,48);
+  ctx.fillText(running?`▶ ${speed}× sim speed`:'❚❚ paused',440,66);
+}
+
+function tile(k,v){return`<div class="tile"><div class="k">${k}</div><div class="v">${v}</div></div>`;}
+function esc(s){return s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+function updatePanel(){
+  const m=sim.metrics();
+  document.getElementById('tiles').innerHTML=
+    tile('Cars built',m.cars)+tile('Throughput',m.t<120?'warming up':`${m.thr.toFixed(1)}/h`)+
+    tile('Avg time on line',m.cycle?fmtDur(m.cycle):'—')+tile('Robot utilization',(m.util*100).toFixed(0)+'%')+
+    tile('Station time with no robot working',(m.starve*100).toFixed(0)+'%')+tile('Tasks in queue',m.waiting)+
+    tile('Faults',m.faults)+tile('Battery aborts',m.aborts);
+  const L=sim.log;
+  if(L.length&&L[L.length-1].id!==lastLogId){
+    lastLogId=L[L.length-1].id;
+    document.getElementById('log').innerHTML=L.slice(-90).reverse().map(e=>`<div class="${e.kind}"><span class="tm">${fmtClock(e.t)}</span> ${esc(e.msg)}</div>`).join('');
+  }
+  const r=sim.robots.find(q=>q.id===selected);
+  if(r){
+    document.getElementById('insp').innerHTML=`<b>${r.id}</b> <span class="muted">· home: ${STATIONS[r.home].name}</span>
+    <table><tr><td>State</td><td style="color:${r.frozen?'#c084fc':STATE_COL[r.state]}">${r.frozen?'Frozen (safety stop)':STATE_LABEL[r.state]}</td></tr>
+    <tr><td>Task</td><td>${r.task?esc(r.task.n)+' @ '+STATIONS[r.task.st].name:'—'}</td></tr>
+    <tr><td>Battery</td><td>${r.battery.toFixed(0)}%</td></tr><tr><td>Wear</td><td>${r.wear.toFixed(0)}%</td></tr>
+    <tr><td>Skills</td><td>${Object.entries(r.skills).map(([s,e])=>`${s} ×${e}`).join(', ')}</td></tr>
+    <tr><td>Time working</td><td>${fmtDur(r.workT)}</td></tr></table>`;
+  }
+}
+function fmtClock(t){const c=6*3600+t;return`${String(Math.floor(c/3600)%24).padStart(2,'0')}:${String(Math.floor(c/60)%60).padStart(2,'0')}:${String(Math.floor(c)%60).padStart(2,'0')}`;}
+
+let last=performance.now();
+function frame(now){
+  const real=Math.min(0.1,(now-last)/1000);last=now;
+  if(running){let rem=real*speed;while(rem>1e-6){const d=Math.min(0.1,rem);sim.step(d);rem-=d;}}
+  draw();
+  if(now-lastPanel>200){lastPanel=now;updatePanel();}
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// ---- controls ----
+const descEl=document.getElementById('stratDesc');descEl.textContent=STRAT_DESC[strategy];
+document.querySelectorAll('#strat button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('#strat button').forEach(x=>x.classList.toggle('on',x===b));
+  strategy=b.dataset.s;sim.strategy=strategy;descEl.textContent=STRAT_DESC[strategy];
+  sim.say('cc',`Strategy switched to ${STRAT_NAMES[strategy]}`);
+});
+document.getElementById('playBtn').onclick=e=>{running=!running;e.target.textContent=running?'Pause':'Play';};
+document.getElementById('resetBtn').onclick=()=>newSim();
+document.getElementById('speed').onchange=e=>speed=+e.target.value;
+faultEl.oninput=()=>{document.getElementById('frv').textContent=(+faultEl.value).toFixed(1);sim.faultRate=+faultEl.value;};
+document.querySelectorAll('[data-ev]').forEach(b=>b.onclick=()=>{
+  const ev=b.dataset.ev;
+  if(ev==='fault')sim.evFault();else if(ev==='shortage')sim.evShortage();else if(ev==='safety')sim.evSafety();else sim.evRush();
+});
+cv.addEventListener('click',e=>{
+  const rc=cv.getBoundingClientRect(),x=(e.clientX-rc.left)*W/rc.width,y=(e.clientY-rc.top)*H/rc.height;
+  let best=null,bd=22;for(const r of sim.robots){const d=Math.hypot(r.x-x,r.y-5-y);if(d<bd){bd=d;best=r;}}
+  selected=best?best.id:null;
+  if(!best)document.getElementById('insp').innerHTML='<span class="muted">Click a robot on the floor to inspect it.</span>';
+});
+
+// ---- benchmark ----
+document.getElementById('benchBtn').onclick=async e=>{
+  const btn=e.target,st=document.getElementById('benchStatus'),out=document.getElementById('benchOut');
+  btn.disabled=true;const fr=+faultEl.value,seeds=[11,23,47],res={};
+  for(const s of['fixed','greedy','ai']){
+    const runs=[];
+    for(const seed of seeds){st.textContent=`Running ${STRAT_NAMES[s]}, seed ${seed}…`;await new Promise(r=>setTimeout(r,10));runs.push(runHeadless(s,seed,fr));}
+    const avg=k=>runs.reduce((a,r)=>a+r[k],0)/runs.length;
+    res[s]={thr:avg('thr'),util:avg('util'),cycle:avg('cycle'),starve:avg('starve'),faults:avg('faults'),aborts:avg('aborts')};
+  }
+  const mx=Math.max(...Object.values(res).map(r=>r.thr)),bestS=Object.keys(res).find(k=>res[k].thr===mx);
+  out.innerHTML=`<table><tr><th>Strategy</th><th>Cars / hour</th><th>Utilization</th><th>Avg time on line</th><th>Station time idle</th><th>Faults</th><th>Battery aborts</th></tr>`+
+    Object.entries(res).map(([k,r])=>`<tr><td class="${k===bestS?'best':''}">${STRAT_NAMES[k]}<div class="bar" style="width:${(r.thr/mx*100).toFixed(0)}%;background:${k===bestS?'#4ade80':'#38bdf8'}"></div></td>
+    <td class="mono">${r.thr.toFixed(1)}</td><td class="mono">${(r.util*100).toFixed(0)}%</td><td class="mono">${fmtDur(r.cycle)}</td>
+    <td class="mono">${(r.starve*100).toFixed(0)}%</td><td class="mono">${r.faults.toFixed(1)}</td><td class="mono">${r.aborts.toFixed(1)}</td></tr>`).join('')+`</table>`;
+  st.textContent=`Done · fault rate ${fr.toFixed(1)} per robot-hour · averaged over ${seeds.length} seeds`;btn.disabled=false;
+};
+</script>
+</body>
+</html>
